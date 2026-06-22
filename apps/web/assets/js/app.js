@@ -283,13 +283,14 @@ document.getElementById("viewCloseBtn").addEventListener("click",closeView);
 document.getElementById("viewFooterCloseBtn").addEventListener("click",closeView);
 
 async function initialize(){
-  const grid=document.getElementById("grid");
-  grid.innerHTML='<div class="empty" style="grid-column:1/-1"><h2>Подключение к базе…</h2><p>Загружаю библиотеку.</p></div>';
-  try{await load();render();}
-  catch(error){
-    console.error(error);
-    document.getElementById("stats").innerHTML="";
-    grid.innerHTML=`<div class="empty" style="grid-column:1/-1"><h2>База данных недоступна</h2><p>${esc(error?.message||"Проверьте настройки подключения.")}</p></div>`;
+  DB={currency:"€",items:seedData()};
+  DB.items.forEach(i=>{if(!i.status)i.status=i.read?"Прочитал":"Хочу прочитать";});
+  document.getElementById("currencySel").value=DB.currency;
+  render();
+
+  // База синхронизируется в фоне и больше не блокирует первый экран.
+  if(sessionStorage.getItem("library.apiToken")){
+    load().then(render).catch(error=>console.warn("Фоновая синхронизация недоступна:",error));
   }
 }
 
