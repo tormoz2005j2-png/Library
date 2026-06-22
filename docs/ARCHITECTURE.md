@@ -20,7 +20,7 @@
 
 С авторизацией: `PUT /api/titles/:id/status`, `POST /api/titles/:id/transactions`, `DELETE /api/transactions/:id`, `PUT|DELETE /api/titles/:id/review`, `GET /api/profile`. Сервер извлекает `userId` только из сессии и проверяет владельца при удалении.
 
-Старые методы управления каталогом сохранены, но теперь также требуют пользовательскую сессию: `PUT /api/items`, `DELETE /api/items/:id`, `PUT /api/settings`, `PUT /api/library`.
+Администратору доступны `GET /api/admin/overview`, смена роли через `PUT /api/admin/users/:id/role` и модерация `DELETE /api/admin/reviews/:id`. Методы управления каталогом `PUT /api/items`, `DELETE /api/items/:id`, `PUT /api/settings`, `PUT /api/library` требуют роль `admin`; проверка выполняется на сервере. Первый пользователь новой установки становится администратором.
 
 ## Развёртывание
 

@@ -31,6 +31,14 @@
 
 ## Локальный запуск интерфейса
 
+Весь проект одной командой (API, миграции и веб-интерфейс):
+
+```bash
+./start.sh
+```
+
+По умолчанию сайт откроется на `http://localhost:8000`, API — на `http://localhost:8787`. Автоматическое открытие браузера: `OPEN_BROWSER=1 ./start.sh`.
+
 ```bash
 python3 -m http.server 8000 --directory apps/web
 ```

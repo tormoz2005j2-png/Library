@@ -16,7 +16,11 @@ class LibraryApi {
   async logout(){try{await this.send("/api/auth/logout","POST");}finally{this.token="";}}
   me(){return this.get("/api/auth/me");} loadLibrary(){return this.get("/api/library");}
   title(id){return this.get(`/api/titles/${encodeURIComponent(id)}`);} profile(){return this.get("/api/profile");}
+  adminOverview(){return this.get("/api/admin/overview");}
+  setUserRole(id,role){return this.send(`/api/admin/users/${encodeURIComponent(id)}/role`,"PUT",{role});}
+  moderateReview(id){return this.send(`/api/admin/reviews/${encodeURIComponent(id)}`,"DELETE");}
   status(id,status){return this.send(`/api/titles/${encodeURIComponent(id)}/status`,"PUT",{status});}
+  readDate(id,readDate){return this.send(`/api/titles/${encodeURIComponent(id)}/read-date`,"PUT",{readDate});}
   transaction(id,data){return this.send(`/api/titles/${encodeURIComponent(id)}/transactions`,"POST",data);}
   deleteTransaction(id){return this.send(`/api/transactions/${encodeURIComponent(id)}`,"DELETE");}
   review(id,data){return this.send(`/api/titles/${encodeURIComponent(id)}/review`,"PUT",data);}
