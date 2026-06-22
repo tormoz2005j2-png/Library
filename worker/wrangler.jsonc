@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "library-api",
+  "main": "src/index.js",
+  "compatibility_date": "2026-06-22",
+  "workers_dev": true,
+  "preview_urls": false,
+  "vars": {
+    "ALLOWED_ORIGINS": "http://localhost:8000,https://tormoz2005j2-png.github.io"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "library-db",
+      "database_id": "58608ea4-2a5d-4cfd-a7fd-121421ec3fe3",
+      "migrations_dir": "migrations"
+    }
+  ]
+}
