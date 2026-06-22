@@ -1,14 +1,142 @@
-<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Моя библиотека</title>
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"><link rel="stylesheet" href="assets/css/main.css"></head>
-<body><header class="site"><div class="wrap"><div class="head-top"><div><h1>Моя <span class="accent">библиотека</span></h1><p class="tagline">Читайте, собирайте историю, делитесь впечатлениями.</p></div><nav class="account" id="account"><button class="btn btn-ghost" data-action="auth">Войти</button></nav></div></div><div class="stats" id="stats"></div></header>
-<div class="wrap"><div class="controls"><div class="search"><span>⌕</span><input id="search" placeholder="Название, автор или серия…" aria-label="Поиск"></div><select class="filter" id="fType"><option value="">Все типы</option><option>Книга</option><option>Комикс</option><option>Манга</option></select><select class="filter" id="fStatus"><option value="">Все личные статусы</option><option value="want_to_read">Хочу прочитать</option><option value="reading">Читаю</option><option value="read">Прочитано</option><option value="purchased">Куплено</option><option value="sold">Продано</option><option value="on_hold">Отложено</option></select><select class="filter" id="sort"><option value="added">Сначала новые</option><option value="title">По названию</option><option value="author">По автору</option></select><div class="btn-row"><button class="btn btn-primary admin-only" id="addItemBtn">+ Тайтл</button></div></div><main><div class="grid" id="grid" aria-live="polite"></div></main></div>
-<footer><div class="wrap">Публичный каталог открыт всем. Личные статусы, сделки и кабинет видите только вы.</div></footer>
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Моя библиотека</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&amp;family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/main.css">
+</head>
+<body>
 
-<div class="overlay" id="authOverlay"><div class="modal auth-modal"><div class="modal-head"><h2 id="authTitle">Вход</h2><button class="x" data-close="authOverlay">×</button></div><form id="authForm" class="modal-body"><div class="field register-only"><label>Имя</label><input id="authName" autocomplete="name" maxlength="80"></div><div class="field"><label>Email</label><input id="authEmail" type="email" autocomplete="email" required></div><div class="field"><label>Пароль</label><input id="authPassword" type="password" minlength="8" autocomplete="current-password" required></div><p class="form-error" id="authError"></p><button class="btn btn-primary wide" id="authSubmit">Войти</button><button type="button" class="text-btn" id="authSwitch">Нет аккаунта? Зарегистрироваться</button></form></div></div>
+<header class="site">
+  <div class="wrap">
+    <div class="head-top">
+      <div>
+        <h1>Моя <span class="accent">библиотека</span></h1>
+        <p class="tagline">Личная картотека книг, комиксов и манги: статусы чтения, оценки, издания, покупки и продажи.</p>
+      </div>
+      <div class="currency-pick">Валюта:
+        <select id="currencySel" aria-label="Валюта">
+          <option value="€">€ Евро</option><option value="$">$ Доллар</option><option value="₽">₽ Рубль</option><option value="£">£ Фунт</option><option value="¥">¥ Иена</option>
+        </select>
+      </div>
+    </div>
+  </div>
+  <div class="stats" id="stats"></div>
+</header>
 
-<div class="overlay" id="viewOverlay"><div class="modal detail-modal"><div class="modal-head"><h2 id="viewTitle">Тайтл</h2><button class="x" data-close="viewOverlay">×</button></div><div class="modal-body" id="viewBody"></div></div></div>
-<div class="overlay" id="profileOverlay"><div class="modal detail-modal"><div class="modal-head"><h2>Личный кабинет</h2><button class="x" data-close="profileOverlay">×</button></div><div class="modal-body" id="profileBody"></div></div></div>
-<div class="overlay" id="adminOverlay"><div class="modal detail-modal"><div class="modal-head"><h2>Управление библиотекой</h2><button class="x" data-close="adminOverlay">×</button></div><div class="modal-body" id="adminBody"></div></div></div>
+<div class="wrap">
+  <div class="controls">
+    <div class="search">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <input id="search" type="text" placeholder="Поиск: название, автор, серия…" aria-label="Поиск">
+    </div>
+    <select class="filter" id="fType" aria-label="Тип">
+      <option value="">Все типы</option><option value="Книга">Книги</option><option value="Комикс">Комиксы</option><option value="Манга">Манга</option>
+    </select>
+    <select class="filter" id="fStatus" aria-label="Статус">
+      <option value="">Любой статус</option>
+      <option value="Хочу прочитать">Хочу прочитать</option>
+      <option value="Читаю сейчас">Читаю сейчас</option>
+      <option value="Прочитал">Прочитал</option>
+      <option value="Перечитал">Перечитал</option>
+      <option value="Не дочитал">Не дочитал</option>
+    </select>
+    <select class="filter" id="fSold" aria-label="Продажа">
+      <option value="">В наличии и проданные</option><option value="have">В наличии</option><option value="sold">Проданные</option>
+    </select>
+    <select class="filter" id="sort" aria-label="Сортировка">
+      <option value="added">Сначала новые</option><option value="title">По названию</option><option value="author">По автору</option><option value="rating">По оценке</option><option value="cost">По стоимости</option><option value="read">По дате прочтения</option>
+    </select>
+    <div class="btn-row">
+      <button class="btn btn-ghost" id="exportBtn">Экспорт</button>
+      <button class="btn btn-ghost" id="importBtn">Импорт</button>
+      <input class="import-file" type="file" id="importFile" accept="application/json">
+      <button class="btn btn-primary" id="addItemBtn">+ Добавить тайтл</button>
+    </div>
+  </div>
+  <main><div class="grid" id="grid"></div></main>
+</div>
 
-<div class="overlay" id="formOverlay"><div class="modal"><div class="modal-head"><h2 id="catalogFormTitle">Тайтл каталога</h2><button class="x" data-close="formOverlay">×</button></div><form id="titleForm" class="modal-body"><input type="hidden" id="editId"><div class="row2"><div class="field"><label>Название *</label><input id="f-title" required maxlength="500"></div><div class="field"><label>Автор</label><input id="f-author" maxlength="500"></div></div><div class="row3"><div class="field"><label>Тип</label><select id="f-type"><option>Книга</option><option>Комикс</option><option>Манга</option></select></div><div class="field"><label>Год издания</label><input id="f-pubDate"></div><div class="field"><label>ISBN</label><input id="f-isbn"></div></div><div class="row2"><div class="field"><label>Обложка URL</label><input id="f-cover" type="url"></div><div class="field"><label>HD-обложка URL</label><input id="f-hdCover" type="url"></div></div><div class="row3"><div class="field"><label>Издатель</label><input id="f-publisher"></div><div class="field"><label>Серия</label><input id="f-series"></div><div class="field"><label>Язык</label><input id="f-language"></div></div><div class="field"><label>Жанры через запятую</label><input id="f-genres"></div><div class="field"><label>Аннотация</label><textarea id="f-annotation" maxlength="30000"></textarea></div><p class="form-error" id="titleError"></p><button class="btn btn-primary">Сохранить</button></form></div></div>
-<div class="toast" id="toast" role="status"></div><script src="assets/js/config.js"></script><script src="assets/js/library-api-client.js"></script><script src="assets/js/app.js"></script></body></html>
+<footer><div class="wrap">Данные хранятся в защищённой облачной базе. «Экспорт» создаёт независимую резервную копию.</div></footer>
+
+<!-- Форма -->
+<div class="overlay" id="formOverlay">
+  <div class="modal">
+    <div class="modal-head"><h2 id="formTitle">Новый тайтл</h2><button class="x" id="formCloseBtn" aria-label="Закрыть">&times;</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="editId">
+
+      <div class="form-section first">Основное</div>
+      <div class="row2">
+        <div class="field"><label>Название *</label><input id="f-title" type="text" placeholder="Берсерк"></div>
+        <div class="field"><label>Автор</label><input id="f-author" type="text" placeholder="Кэнтаро Миура"></div>
+      </div>
+      <div class="row3">
+        <div class="field"><label>Тип</label><select id="f-type"><option>Книга</option><option>Комикс</option><option>Манга</option></select></div>
+        <div class="field"><label>Статус</label><select id="f-status">
+          <option>Хочу прочитать</option><option>Читаю сейчас</option><option>Прочитал</option><option>Перечитал</option><option>Не дочитал</option>
+        </select></div>
+        <div class="field"><label>Обложка (ссылка)</label><input id="f-cover" type="text" placeholder="https://…"></div>
+      </div>
+
+      <div class="form-section">Издание</div>
+      <div class="row3">
+        <div class="field"><label>ISBN</label><input id="f-isbn" type="text" placeholder="978-…"></div>
+        <div class="field"><label>Издатель</label><input id="f-publisher" type="text"></div>
+        <div class="field"><label>Дата издания</label><input id="f-pubDate" type="text" placeholder="2024"></div>
+      </div>
+      <div class="row3">
+        <div class="field"><label>Язык</label><input id="f-language" type="text" placeholder="Русский"></div>
+        <div class="field"><label>Серия</label><input id="f-series" type="text"></div>
+        <div class="field"><label>Жанры (через запятую)</label><input id="f-genres" type="text" placeholder="фэнтези, драма"></div>
+      </div>
+      <div class="field"><label>Аннотация (описание издателя)</label><textarea id="f-annotation"></textarea></div>
+
+      <div class="form-section">Чтение и оценка</div>
+      <div class="row2">
+        <div class="field"><label>Дата прочтения</label><input id="f-read" type="text" placeholder="ГГГГ-ММ-ДД, ГГГГ-ММ или ГГГГ"><div class="hint">Формат: 2025-11-20, или 2025-11, или 2025</div></div>
+        <div class="field"><label>Оценка</label>
+          <div class="rate-pick" id="ratePick"><span data-v="1">★</span><span data-v="2">★</span><span data-v="3">★</span><span data-v="4">★</span><span data-v="5">★</span></div>
+          <input type="hidden" id="f-rating" value="0">
+          <div class="hint">Клик по звезде; повторный клик по той же — сброс.</div>
+        </div>
+      </div>
+      <div class="field"><label>Рецензия (ваше мнение)</label><textarea id="f-review" placeholder="Мысли, впечатления…"></textarea></div>
+      <div class="field"><label>Цитаты (каждая с новой строки)</label><textarea id="f-quotes" placeholder="Одна цитата на строку"></textarea></div>
+
+      <div class="form-section">Покупка и продажа</div>
+      <div class="row2">
+        <div class="field"><label>Дата приобретения</label><input id="f-acquired" type="date"></div>
+        <div class="field"><label>Стоимость покупки</label><input id="f-cost" type="number" min="0" step="0.01" placeholder="0"></div>
+      </div>
+      <div class="checkrow"><input type="checkbox" id="f-sold"><label for="f-sold">Продано</label></div>
+      <div class="sold-block" id="soldBlock"><div class="row2">
+        <div class="field sold-field"><label>Дата продажи</label><input id="f-solddate" type="date"></div>
+        <div class="field sold-field"><label>Цена продажи</label><input id="f-soldprice" type="number" min="0" step="0.01" placeholder="0"></div>
+      </div></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" id="formCancelBtn">Отмена</button>
+      <button class="btn btn-primary" id="formSaveBtn">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<!-- Просмотр -->
+<div class="overlay" id="viewOverlay">
+  <div class="modal">
+    <div class="modal-head"><h2 id="viewTitle"></h2><button class="x" id="viewCloseBtn" aria-label="Закрыть">&times;</button></div>
+    <div class="modal-body" id="viewBody"></div>
+    <div class="modal-foot"><button class="btn btn-ghost" id="viewFooterCloseBtn">Закрыть</button><button class="btn btn-primary" id="viewEditBtn">Редактировать</button></div>
+  </div>
+</div>
+
+<script src="assets/js/config.js"></script>
+<script src="assets/js/library-api-client.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>

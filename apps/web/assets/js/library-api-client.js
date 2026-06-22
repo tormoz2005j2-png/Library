@@ -1,32 +1,78 @@
 class LibraryApi {
-  constructor(apiUrl) { this.apiUrl=String(apiUrl||"").replace(/\/$/,""); this.tokenKey="library.sessionToken"; }
-  get token(){ return localStorage.getItem(this.tokenKey)||""; }
-  set token(value){ value?localStorage.setItem(this.tokenKey,value):localStorage.removeItem(this.tokenKey); }
-  async request(path,options={}){
-    if(!this.apiUrl||this.apiUrl.includes("YOUR_SUBDOMAIN")) throw new Error("API не настроен.");
-    const response=await fetch(`${this.apiUrl}${path}`,{...options,headers:{"Content-Type":"application/json",...(options.headers||{}),...(this.token?{Authorization:`Bearer ${this.token}`}:{})}});
-    const payload=await response.json().catch(()=>({}));
-    if(response.status===401&&this.token){this.token="";window.dispatchEvent(new Event("auth-expired"));}
-    if(!response.ok)throw new Error(payload.error||`Ошибка API: ${response.status}`);return payload;
+  constructor(apiUrl) {
+    this.apiUrl = String(apiUrl || "").replace(/\/$/, "");
+    this.tokenKey = "library.apiToken";
   }
-  get(path){return this.request(path);}
-  send(path,method,body){return this.request(path,{method,body:body===undefined?undefined:JSON.stringify(body)});}
-  async register(data){const r=await this.send("/api/auth/register","POST",data);this.token=r.token;return r;}
-  async login(data){const r=await this.send("/api/auth/login","POST",data);this.token=r.token;return r;}
-  async logout(){try{await this.send("/api/auth/logout","POST");}finally{this.token="";}}
-  me(){return this.get("/api/auth/me");} loadLibrary(){return this.get("/api/library");}
-  title(id){return this.get(`/api/titles/${encodeURIComponent(id)}`);} profile(){return this.get("/api/profile");}
-  adminOverview(){return this.get("/api/admin/overview");}
-  setUserRole(id,role){return this.send(`/api/admin/users/${encodeURIComponent(id)}/role`,"PUT",{role});}
-  moderateReview(id){return this.send(`/api/admin/reviews/${encodeURIComponent(id)}`,"DELETE");}
-  status(id,status){return this.send(`/api/titles/${encodeURIComponent(id)}/status`,"PUT",{status});}
-  readDate(id,readDate){return this.send(`/api/titles/${encodeURIComponent(id)}/read-date`,"PUT",{readDate});}
-  transaction(id,data){return this.send(`/api/titles/${encodeURIComponent(id)}/transactions`,"POST",data);}
-  deleteTransaction(id){return this.send(`/api/transactions/${encodeURIComponent(id)}`,"DELETE");}
-  review(id,data){return this.send(`/api/titles/${encodeURIComponent(id)}/review`,"PUT",data);}
-  deleteReview(id){return this.send(`/api/titles/${encodeURIComponent(id)}/review`,"DELETE");}
-  saveCurrency(currency){return this.send("/api/settings","PUT",{currency});}
-  saveItem(item){return this.send("/api/items","PUT",item);} deleteItem(id){return this.send(`/api/items/${encodeURIComponent(id)}`,"DELETE");}
-  replaceLibrary(data){return this.send("/api/library","PUT",data);}
+
+  isConfigured() {
+    return this.apiUrl && !this.apiUrl.includes("YOUR_SUBDOMAIN");
+  }
+
+  getToken(forceNew = false) {
+    if (forceNew) sessionStorage.removeItem(this.tokenKey);
+    let token = sessionStorage.getItem(this.tokenKey);
+    if (!token) {
+      token = window.prompt("Введите личный ключ доступа к библиотеке:")?.trim() || "";
+      if (token) sessionStorage.setItem(this.tokenKey, token);
+    }
+    return token;
+  }
+
+  async request(path, options = {}, canRetry = true) {
+    if (!this.isConfigured()) {
+      throw new Error("API не настроен. Укажите адрес в assets/js/config.js.");
+    }
+
+    const token = this.getToken();
+    if (!token) throw new Error("Для доступа к библиотеке нужен личный ключ.");
+
+    const response = await fetch(`${this.apiUrl}${path}`, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        "X-Library-Token": token,
+        ...(options.headers || {})
+      }
+    });
+
+    if (response.status === 401 && canRetry) {
+      this.getToken(true);
+      return this.request(path, options, false);
+    }
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || `Ошибка API: ${response.status}`);
+    return payload;
+  }
+
+  loadLibrary() {
+    return this.request("/api/library", { method: "GET" });
+  }
+
+  saveCurrency(currency) {
+    return this.request("/api/settings", {
+      method: "PUT",
+      body: JSON.stringify({ currency })
+    });
+  }
+
+  saveItem(item) {
+    return this.request("/api/items", {
+      method: "PUT",
+      body: JSON.stringify(item)
+    });
+  }
+
+  deleteItem(id) {
+    return this.request(`/api/items/${encodeURIComponent(id)}`, { method: "DELETE" });
+  }
+
+  replaceLibrary(library) {
+    return this.request("/api/library", {
+      method: "PUT",
+      body: JSON.stringify(library)
+    });
+  }
 }
-window.libraryApi=new LibraryApi(window.LIBRARY_CONFIG?.apiUrl);
+
+window.libraryApi = new LibraryApi(window.LIBRARY_CONFIG?.apiUrl);
