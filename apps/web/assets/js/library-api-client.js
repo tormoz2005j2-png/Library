@@ -21,6 +21,7 @@ class LibraryApi {
   moderateReview(id){return this.send(`/api/admin/reviews/${encodeURIComponent(id)}`,"DELETE");}
   status(id,status){return this.send(`/api/titles/${encodeURIComponent(id)}/status`,"PUT",{status});}
   readDate(id,readDate){return this.send(`/api/titles/${encodeURIComponent(id)}/read-date`,"PUT",{readDate});}
+  rating(id,rating){return this.send(`/api/titles/${encodeURIComponent(id)}/rating`,"PUT",{rating});}
   transaction(id,data){return this.send(`/api/titles/${encodeURIComponent(id)}/transactions`,"POST",data);}
   deleteTransaction(id){return this.send(`/api/transactions/${encodeURIComponent(id)}`,"DELETE");}
   review(id,data){return this.send(`/api/titles/${encodeURIComponent(id)}/review`,"PUT",data);}
