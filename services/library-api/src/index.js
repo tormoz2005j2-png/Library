@@ -64,6 +64,10 @@ export default {
         const titleId = decodeURIComponent(path.split("/")[3]);
         return json(await saveReadDate(env.DB, requireUser(user).id, titleId, await readJson(request)), 200, cors);
       }
+      if (request.method === "PUT" && /^\/api\/titles\/[^/]+\/rating$/.test(path)) {
+        const titleId = decodeURIComponent(path.split("/")[3]);
+        return json(await saveRating(env.DB, requireUser(user).id, titleId, await readJson(request)), 200, cors);
+      }
       if (request.method === "POST" && /^\/api\/titles\/[^/]+\/transactions$/.test(path)) {
         const titleId = decodeURIComponent(path.split("/")[3]);
         return json(await createTransaction(env.DB, requireUser(user).id, titleId, await readJson(request)), 201, cors);
@@ -149,19 +153,19 @@ async function optionalUser(request, db) {
 }
 
 async function loadLibrary(db, userId) {
-  const [settings, items, statuses] = await db.batch([db.prepare("SELECT currency,initialized FROM library_settings WHERE id=1"), db.prepare("SELECT i.*,avg(r.rating) average_rating,count(r.id) review_count FROM library_items i LEFT JOIN reviews r ON r.title_id=i.id GROUP BY i.id ORDER BY i.added DESC"), userId ? db.prepare("SELECT title_id,status,read_on readDate FROM user_title_statuses WHERE user_id=?").bind(userId) : db.prepare("SELECT title_id,status,read_on readDate FROM user_title_statuses WHERE 0")]);
+  const [settings, items, statuses] = await db.batch([db.prepare("SELECT currency,initialized FROM library_settings WHERE id=1"), db.prepare("SELECT i.*,ur.average_rating,coalesce(rc.review_count,0) review_count FROM library_items i LEFT JOIN (SELECT title_id,avg(rating) average_rating FROM user_title_statuses WHERE rating IS NOT NULL GROUP BY title_id) ur ON ur.title_id=i.id LEFT JOIN (SELECT title_id,count(*) review_count FROM reviews GROUP BY title_id) rc ON rc.title_id=i.id ORDER BY i.added DESC"), userId ? db.prepare("SELECT title_id,status,read_on readDate,rating ownRating FROM user_title_statuses WHERE user_id=?").bind(userId) : db.prepare("SELECT title_id,status,read_on readDate,rating ownRating FROM user_title_statuses WHERE 0")]);
   const map = Object.fromEntries(statuses.results.map(x => [x.title_id, x]));
-  return { currency: settings.results[0]?.currency || "€", initialized: Boolean(settings.results[0]?.initialized), items: items.results.map(x => ({ ...rowToItem(x), userStatus: map[x.id]?.status || null, readDate: map[x.id]?.readDate || null })) };
+  return { currency: settings.results[0]?.currency || "€", initialized: Boolean(settings.results[0]?.initialized), items: items.results.map(x => ({ ...rowToItem(x), userStatus: map[x.id]?.status || null, readDate: map[x.id]?.readDate || null, ownRating: map[x.id]?.ownRating || null })) };
 }
 async function loadTitle(db, titleId, userId) {
-  const item = await db.prepare("SELECT * FROM library_items WHERE id=?").bind(titleId).first(); if (!item) throw new ApiError("Тайтл не найден.", 404);
+  const item = await db.prepare("SELECT i.*,(SELECT avg(rating) FROM user_title_statuses WHERE title_id=i.id AND rating IS NOT NULL) average_rating,(SELECT count(*) FROM reviews WHERE title_id=i.id) review_count FROM library_items i WHERE i.id=?").bind(titleId).first(); if (!item) throw new ApiError("Тайтл не найден.", 404);
   let status = null, transactions = [], ownReview = null;
   if (userId) {
-    [status, ownReview] = await Promise.all([db.prepare("SELECT status,read_on readDate FROM user_title_statuses WHERE user_id=? AND title_id=?").bind(userId,titleId).first(), db.prepare("SELECT id,body,rating,created_at createdAt,updated_at updatedAt FROM reviews WHERE user_id=? AND title_id=?").bind(userId,titleId).first()]);
+    [status, ownReview] = await Promise.all([db.prepare("SELECT status,read_on readDate,rating ownRating FROM user_title_statuses WHERE user_id=? AND title_id=?").bind(userId,titleId).first(), db.prepare("SELECT id,body,rating,created_at createdAt,updated_at updatedAt FROM reviews WHERE user_id=? AND title_id=?").bind(userId,titleId).first()]);
     const result = await db.prepare("SELECT id,type,amount_cents,currency,action_date actionDate,comment,created_at createdAt,updated_at updatedAt FROM title_transactions WHERE user_id=? AND title_id=? ORDER BY action_date DESC,created_at DESC").bind(userId,titleId).all();
     transactions = result.results.map(transactionDto);
   }
-  return { title: rowToItem(item), userStatus: status?.status || null, readDate: status?.readDate || null, transactions, ownReview, reviews: await reviewsForTitle(db,titleId) };
+  return { title: rowToItem(item), userStatus: status?.status || null, readDate: status?.readDate || null, ownRating: status?.ownRating || ownReview?.rating || null, transactions, ownReview, reviews: await reviewsForTitle(db,titleId) };
 }
 async function saveStatus(db, userId, titleId, body) {
   await assertTitle(db,titleId); const status = text(body.status,30); if (!USER_STATUSES.has(status)) throw new ApiError("Некорректный статус.");
@@ -173,6 +177,11 @@ async function saveReadDate(db,userId,titleId,body){
   await db.prepare("INSERT INTO user_title_statuses(user_id,title_id,status,read_on) VALUES(?,?,?,?) ON CONFLICT(user_id,title_id) DO UPDATE SET read_on=excluded.read_on").bind(userId,titleId,"read",readDate).run();
   return { readDate };
 }
+async function saveRating(db,userId,titleId,body){
+  await assertTitle(db,titleId); const rating=Number(body.rating); if(!Number.isInteger(rating)||rating<1||rating>10)throw new ApiError("Оценка должна быть от 0,5 до 5 звёзд.");
+  await db.batch([db.prepare("INSERT INTO user_title_statuses(user_id,title_id,status,rating) VALUES(?,?,?,?) ON CONFLICT(user_id,title_id) DO UPDATE SET rating=excluded.rating").bind(userId,titleId,"read",rating),db.prepare("UPDATE reviews SET rating=? WHERE user_id=? AND title_id=?").bind(rating,userId,titleId)]);
+  return { rating };
+}
 async function createTransaction(db,userId,titleId,body) {
   await assertTitle(db,titleId); const type=text(body.type,20), currency=text(body.currency,3), amount=body.amount===""||body.amount==null?NaN:Number(body.amount), actionDate=validDate(body.actionDate), comment=text(body.comment,2000).trim();
   if (!TRANSACTION_TYPES.has(type)) throw new ApiError("Некорректный тип операции."); if (!Number.isFinite(amount) || amount < 0) throw new ApiError("Сумма должна быть числом не меньше нуля."); if (!CURRENCIES.has(currency)) throw new ApiError("Некорректная валюта.");
@@ -181,12 +190,12 @@ async function createTransaction(db,userId,titleId,body) {
 }
 async function saveReview(db,userId,titleId,body) {
   await assertTitle(db,titleId); const reviewBody=text(body.body,10000).trim(), rating=Number(body.rating); if (!reviewBody) throw new ApiError("Текст рецензии не должен быть пустым."); if (!Number.isInteger(rating)||rating<1||rating>10) throw new ApiError("Оценка должна быть от 1 до 10.");
-  const id=crypto.randomUUID(); await db.prepare("INSERT INTO reviews(id,user_id,title_id,body,rating) VALUES(?,?,?,?,?) ON CONFLICT(user_id,title_id) DO UPDATE SET body=excluded.body,rating=excluded.rating").bind(id,userId,titleId,reviewBody,rating).run();
+  const id=crypto.randomUUID(); await db.batch([db.prepare("INSERT INTO reviews(id,user_id,title_id,body,rating) VALUES(?,?,?,?,?) ON CONFLICT(user_id,title_id) DO UPDATE SET body=excluded.body,rating=excluded.rating").bind(id,userId,titleId,reviewBody,rating),db.prepare("INSERT INTO user_title_statuses(user_id,title_id,status,rating) VALUES(?,?,?,?) ON CONFLICT(user_id,title_id) DO UPDATE SET rating=excluded.rating").bind(userId,titleId,"read",rating)]);
   return { review: await db.prepare("SELECT id,body,rating,created_at createdAt,updated_at updatedAt FROM reviews WHERE user_id=? AND title_id=?").bind(userId,titleId).first() };
 }
 async function reviewsForTitle(db,titleId) { const r=await db.prepare("SELECT r.id,r.body,r.rating,r.created_at createdAt,r.updated_at updatedAt,u.id authorId,u.display_name authorName FROM reviews r JOIN users u ON u.id=r.user_id WHERE r.title_id=? ORDER BY r.updated_at DESC").bind(titleId).all(); return r.results; }
 async function profile(db,userId) {
-  const [statuses,transactions,reviews]=await db.batch([db.prepare("SELECT s.status,s.read_on readDate,s.updated_at updatedAt,i.id titleId,i.title,i.author,i.cover_url cover FROM user_title_statuses s JOIN library_items i ON i.id=s.title_id WHERE s.user_id=? ORDER BY s.updated_at DESC").bind(userId),db.prepare("SELECT t.id,t.title_id titleId,t.type,t.amount_cents,t.currency,t.action_date actionDate,t.comment,i.title FROM title_transactions t JOIN library_items i ON i.id=t.title_id WHERE t.user_id=? ORDER BY t.action_date DESC").bind(userId),db.prepare("SELECT r.id,r.title_id titleId,r.body,r.rating,r.updated_at updatedAt,i.title FROM reviews r JOIN library_items i ON i.id=r.title_id WHERE r.user_id=? ORDER BY r.updated_at DESC").bind(userId)]);
+  const [statuses,transactions,reviews]=await db.batch([db.prepare("SELECT s.status,s.read_on readDate,s.rating ownRating,s.updated_at updatedAt,i.id titleId,i.title,i.author,i.cover_url cover FROM user_title_statuses s JOIN library_items i ON i.id=s.title_id WHERE s.user_id=? ORDER BY s.updated_at DESC").bind(userId),db.prepare("SELECT t.id,t.title_id titleId,t.type,t.amount_cents,t.currency,t.action_date actionDate,t.comment,i.title FROM title_transactions t JOIN library_items i ON i.id=t.title_id WHERE t.user_id=? ORDER BY t.action_date DESC").bind(userId),db.prepare("SELECT r.id,r.title_id titleId,r.body,r.rating,r.updated_at updatedAt,i.title FROM reviews r JOIN library_items i ON i.id=r.title_id WHERE r.user_id=? ORDER BY r.updated_at DESC").bind(userId)]);
   const tx=transactions.results.map(transactionDto), totals={}; for(const t of tx){totals[t.currency] ||= { spent:0,received:0,difference:0 }; totals[t.currency][t.type==="purchase"?"spent":"received"]+=t.amount;} for(const v of Object.values(totals))v.difference=Math.round((v.received-v.spent)*100)/100;
   return { titles:statuses.results, transactions:tx, reviews:reviews.results, totals };
 }
