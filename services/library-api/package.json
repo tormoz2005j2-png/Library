@@ -4,9 +4,15 @@
   "version": "1.0.0",
   "scripts": {
     "dev": "wrangler dev",
+    "check": "node --check src/index.js && node --check ../../apps/web/assets/js/app.js && node --check ../../apps/web/assets/js/library-api-client.js",
+    "test": "node --test test/*.test.js",
+    "typecheck": "node --check src/index.js",
+    "build": "wrangler deploy --dry-run --outdir dist",
     "db:create": "wrangler d1 create library-db",
     "db:init:local": "wrangler d1 execute library-db --local --file=./migrations/0001_initial.sql",
     "db:init:remote": "wrangler d1 execute library-db --remote --file=./migrations/0001_initial.sql",
+    "db:migrate:local": "wrangler d1 migrations apply library-db --local",
+    "db:migrate:remote": "wrangler d1 migrations apply library-db --remote",
     "secret": "wrangler secret put LIBRARY_TOKEN",
     "deploy": "wrangler deploy"
   },
