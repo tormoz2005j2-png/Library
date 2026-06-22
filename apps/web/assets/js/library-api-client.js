@@ -20,7 +20,7 @@ class LibraryApi {
 
   async request(path, options = {}, canRetry = true) {
     if (!this.isConfigured()) {
-      throw new Error("API не настроен. Укажите адрес Worker в api-config.js.");
+      throw new Error("API не настроен. Укажите адрес в assets/js/config.js.");
     }
 
     const token = this.getToken();
