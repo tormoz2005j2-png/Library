@@ -1,76 +1,59 @@
 # Моя библиотека
 
-Пользовательская библиотека книг, комиксов и манги с публичным каталогом, личными статусами, сделками, рецензиями и кабинетом.
+Публичный каталог книг, комиксов и манги с пользовательскими кабинетами, личными статусами, оценками, рецензиями, покупками/продажами и административной панелью.
 
-## Структура
+## Архитектура
 
 ```text
-.
-├── apps/
-│   └── web/                         # Статический клиент
-│       ├── index.html
-│       └── assets/
-│           ├── css/main.css
-│           └── js/
-│               ├── app.js          # UI и бизнес-логика
-│               ├── config.js       # Публичный адрес API
-│               └── library-api-client.js
-├── services/
-│   └── library-api/                 # Защищённый серверный API
-│       ├── migrations/
-│       │   └── 0001_initial.sql
-│       ├── src/index.js
-│       ├── package.json
-│       └── wrangler.jsonc
-├── docs/
-│   └── ARCHITECTURE.md
-├── .github/workflows/
-│   └── deploy-web.yml              # Публикация только apps/web
-└── README.md
+apps/web/                              HTML, CSS и browser JavaScript
+services/library-api/src/index.js      HTTP-контракт и бизнес-логика
+services/library-api/src/server.js     Node.js/Fastify entry point
+services/library-api/src/postgres-adapter.js
+services/library-api/migrations-postgres/
+services/library-api/seeds/catalog.json
+railway.json                           конфигурация Railway
 ```
 
-## Локальный запуск интерфейса
+Один Node.js-сервис раздаёт frontend и API с одного origin. Данные хранятся в PostgreSQL. Старые файлы D1 сохранены в `services/library-api/migrations` только для истории миграции.
 
-Весь проект одной командой (API, миграции и веб-интерфейс):
+## Локальный запуск
+
+Нужны Node.js 24+ и PostgreSQL:
 
 ```bash
+export DATABASE_URL='postgresql://user:password@localhost:5432/library'
 ./start.sh
 ```
 
-По умолчанию сайт откроется на `http://localhost:8000`, API — на `http://localhost:8787`. Автоматическое открытие браузера: `OPEN_BROWSER=1 ./start.sh`.
+Приложение откроется на `http://localhost:3000`. При первом запуске применится схема и загрузятся 963 тайтла; повторный запуск seed не перезаписывает данные.
 
-```bash
-python3 -m http.server 8000 --directory apps/web
-```
-
-Откройте `http://localhost:8000`. Адрес API задаётся в `apps/web/assets/js/config.js`; секретного ключа в репозитории нет.
-
-Интерфейс публикуется в GitHub Pages отдельным workflow. В артефакт попадает только `apps/web`, серверный код и миграции не отдаются как файлы сайта.
-
-## Работа с API
+## Команды
 
 ```bash
 cd services/library-api
-npm install
-npm run dev
+npm ci
+npm run check
+npm test
+npm run db:migrate:postgres
+npm run db:seed:postgres
+npm start
 ```
 
-Доступные команды:
+## Railway
 
-- `npm run dev` — локальный API;
-- `npm run db:init:local` — применить схему к локальной БД;
-- `npm run db:migrate:local` — применить все миграции локально;
-- `npm run db:migrate:remote` — применить все миграции к D1;
-- `npm run check`, `npm test`, `npm run build` — проверки и dry-run сборки;
-- `npm run deploy` — опубликовать API.
+Проект собирается корневым `railway.json` и `services/library-api/Dockerfile`. Для приложения нужны переменные:
 
-Текущая серверная реализация использует адаптер Cloudflare Worker/D1, но веб-приложение зависит только от HTTP-контракта. Его можно заменить другим сервером и БД, не переписывая интерфейс — подробности в [архитектурной документации](docs/ARCHITECTURE.md).
+- `DATABASE_URL` — ссылка на PostgreSQL Railway;
+- `NODE_ENV=production`;
+- `DATABASE_SSL=false` для внутреннего Railway PostgreSQL;
+- опционально `ALLOWED_ORIGINS`, если frontend будет вынесен на другой домен.
 
-## Данные
+## Безопасность
 
-- Основное хранилище — серверная БД.
-- `localStorage` читается только для одноразовой миграции старой версии.
-- Токен пользовательской сессии хранится в `localStorage`, а на сервере — только его SHA-256 отпечаток.
-- Пароли хешируются PBKDF2-SHA-256 (210 000 итераций, индивидуальная соль).
-- Публичные ответы не содержат пользовательские операции или финансовые суммы.
-- Экспорт и импорт JSON остаются независимым резервным механизмом.
+- пароли хешируются PBKDF2-SHA-256 с индивидуальной солью и 210 000 итераций;
+- в базе хранится только SHA-256 отпечаток session token;
+- первая зарегистрированная учётная запись получает роль администратора;
+- финансовые суммы хранятся целыми минимальными единицами;
+- операции пользователя проверяются сервером по владельцу.
+
+Подробности: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).

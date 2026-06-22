@@ -1,27 +1,36 @@
 # Архитектура
 
-Статический SPA в `apps/web` обращается к Cloudflare Worker в `services/library-api`; данные хранятся в D1. Публичные методы каталога и рецензий доступны без входа. Все изменения пользователя требуют `Authorization: Bearer <token>`.
+## Компоненты
 
-## Данные
+`apps/web` — SPA без framework-зависимостей. `library-api-client.js` является единственной точкой HTTP-доступа.
 
-- `library_items` — публичные тайтлы (сохранена совместимость со старой схемой);
-- `users` и `sessions` — аккаунты и серверные сессии;
-- `user_title_statuses` — один текущий личный статус на пару пользователь–тайтл;
-- `title_transactions` — любое число покупок и продаж;
-- `reviews` — одна редактируемая рецензия на пару пользователь–тайтл.
+`services/library-api/src/index.js` — provider-neutral обработчик на Web Request/Response API. В нём находятся маршруты, валидация, роли и бизнес-правила.
 
-Суммы хранятся в целых минимальных единицах. Финансовые итоги считаются отдельно по валютам — курсы не угадываются. Каскадные внешние ключи удаляют зависимые данные. Пароли защищены PBKDF2-SHA-256, в D1 не сохраняются исходные session tokens.
+`server.js` запускает обработчик в Fastify, раздаёт статические файлы и завершает соединения корректно при SIGTERM. `postgres-adapter.js` реализует прежний интерфейс prepared statements поверх PostgreSQL, поэтому frontend и проверенная бизнес-логика не переписаны при отказе от Cloudflare.
+
+## Модель данных
+
+- `library_items` — публичный каталог;
+- `users`, `sessions` — аккаунты и сессии;
+- `user_title_statuses` — личный статус, дата прочтения и оценка;
+- `title_transactions` — покупки и продажи;
+- `reviews` — одна редактируемая рецензия пользователя на тайтл;
+- `library_settings` — валюта и состояние инициализации.
+
+PostgreSQL-миграции применяются один раз через таблицу `schema_migrations`. Seed идемпотентен и заполняет только пустой каталог.
 
 ## HTTP API
 
-Авторизация: `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`.
+- авторизация: `POST /api/auth/register|login|logout`, `GET /api/auth/me`;
+- каталог: `GET /api/library`, `GET /api/titles/:id`;
+- личные данные: статус, дата прочтения, оценка, сделки и рецензия;
+- кабинет: `GET /api/profile`;
+- администрирование: обзор, роли, модерация и CRUD каталога.
 
-Публично: `GET /api/library`, `GET /api/titles/:id`, `GET /api/titles/:id/reviews`.
-
-С авторизацией: `PUT /api/titles/:id/status`, `POST /api/titles/:id/transactions`, `DELETE /api/transactions/:id`, `PUT|DELETE /api/titles/:id/review`, `GET /api/profile`. Сервер извлекает `userId` только из сессии и проверяет владельца при удалении.
-
-Администратору доступны `GET /api/admin/overview`, смена роли через `PUT /api/admin/users/:id/role` и модерация `DELETE /api/admin/reviews/:id`. Методы управления каталогом `PUT /api/items`, `DELETE /api/items/:id`, `PUT /api/settings`, `PUT /api/library` требуют роль `admin`; проверка выполняется на сервере. Первый пользователь новой установки становится администратором.
+Публичные методы не возвращают финансовые операции. Изменения каталога требуют роль `admin`, а `userId` сервер берёт только из подтверждённой сессии.
 
 ## Развёртывание
 
-Перед публикацией API примените миграции: `npm run db:migrate:remote`, затем `npm run deploy`. Разрешённые origins задаются в `wrangler.jsonc`.
+Railway собирает Dockerfile из корня репозитория. Контейнер последовательно применяет миграции, выполняет безопасный seed и запускает Fastify. PostgreSQL подключается по внутреннему `DATABASE_URL`; frontend и API работают с одного домена, поэтому CORS не участвует в обычном production-трафике.
+
+GitHub Pages следует отключить после успешного запуска Railway, чтобы не существовало двух конкурирующих production-версий.
