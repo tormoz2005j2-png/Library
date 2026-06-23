@@ -1,4 +1,3 @@
-const CURRENCIES = new Set(["EUR", "USD", "RUB", "GBP", "JPY"]);
 const ITEM_TYPES = new Set(["Книга", "Комикс", "Манга"]);
 const LEGACY_STATUSES = new Set(["Хочу прочитать", "Читаю сейчас", "Прочитал", "Перечитал", "Не дочитал"]);
 const USER_STATUSES = new Set(["read", "purchased", "sold", "want_to_read", "reading", "on_hold"]);
@@ -193,7 +192,7 @@ async function saveRating(db,userId,titleId,body){
 }
 async function createTransaction(db,userId,titleId,body) {
   await assertTitle(db,titleId); const type=text(body.type,20), currency=text(body.currency,3), amount=body.amount===""||body.amount==null?NaN:Number(body.amount), actionDate=validDate(body.actionDate), comment=text(body.comment,2000).trim();
-  if (!TRANSACTION_TYPES.has(type)) throw new ApiError("Некорректный тип операции."); if (!Number.isFinite(amount) || amount < 0) throw new ApiError("Сумма должна быть числом не меньше нуля."); if (!CURRENCIES.has(currency)) throw new ApiError("Некорректная валюта.");
+  if (!TRANSACTION_TYPES.has(type)) throw new ApiError("Некорректный тип операции."); if (!Number.isFinite(amount) || amount < 0) throw new ApiError("Сумма должна быть числом не меньше нуля."); if (currency !== "RUB") throw new ApiError("Новые операции можно добавлять только в рублях.");
   const id=crypto.randomUUID(), cents=Math.round(amount*100); await db.prepare("INSERT INTO title_transactions(id,user_id,title_id,type,amount_cents,currency,action_date,comment) VALUES(?,?,?,?,?,?,?,?)").bind(id,userId,titleId,type,cents,currency,actionDate,comment).run();
   return { transaction:{ id,type,amount:cents/100,currency,actionDate,comment } };
 }
