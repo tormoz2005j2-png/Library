@@ -137,7 +137,9 @@ async function register(body, db, adminEmails) {
   const exists = await db.prepare("SELECT 1 FROM users WHERE email = ? COLLATE NOCASE").bind(email).first();
   if (exists) throw new ApiError("Пользователь с таким email уже существует.", 409);
   const id = crypto.randomUUID(), salt = randomToken(16), hash = await hashPassword(password, salt), role = roleForEmail(email, adminEmails);
-  await db.prepare("INSERT INTO users(id,email,display_name,password_hash,password_salt,role) VALUES(?,?,?,?,?,?)").bind(id,email,displayName,hash,salt,role).run();
+  const insertUser = db.prepare("INSERT INTO users(id,email,display_name,password_hash,password_salt,role) VALUES(?,?,?,?,?,?)").bind(id,email,displayName,hash,salt,role);
+  if (role === "admin") await db.batch([insertUser, legacyStatusesStatement(db,id)]);
+  else await insertUser.run();
   return createSession(db, { id, email, display_name: displayName, role });
 }
 async function login(body, db) {
@@ -256,6 +258,17 @@ const toCents=v=>v==null?null:Math.round(v*100);
 function validEmail(v){const s=text(v,254).trim().toLowerCase();if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s))throw new ApiError("Введите корректный email.");return s;}
 function validPassword(v){const s=text(v,200);if(s.length<8)throw new ApiError("Пароль должен содержать минимум 8 символов.");return s;}
 function roleForEmail(email,configured){const admins=String(configured||"").split(",").map(x=>x.trim().toLowerCase()).filter(Boolean);return admins.includes(String(email||"").trim().toLowerCase())?"admin":"user";}
+function legacyStatusesStatement(db,userId){return db.prepare(`INSERT INTO user_title_statuses(user_id,title_id,status)
+  SELECT ?,id,CASE reading_status
+    WHEN 'Прочитал' THEN 'read'
+    WHEN 'Перечитал' THEN 'read'
+    WHEN 'Читаю сейчас' THEN 'reading'
+    WHEN 'Хочу прочитать' THEN 'want_to_read'
+    WHEN 'Не дочитал' THEN 'on_hold'
+  END
+  FROM library_items
+  WHERE reading_status IN ('Прочитал','Перечитал','Читаю сейчас','Хочу прочитать','Не дочитал')
+  ON CONFLICT(user_id,title_id) DO NOTHING`).bind(userId);}
 function validDate(v){const s=text(v,10),m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(s);if(!m)throw new ApiError("Некорректная дата.");const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3]));if(d.getUTCFullYear()!==+m[1]||d.getUTCMonth()!==+m[2]-1||d.getUTCDate()!==+m[3])throw new ApiError("Некорректная дата.");return s;}
 function validateSymbolCurrency(v){if(!new Set(["€","$","₽","£","¥"]).has(v))throw new ApiError("Некорректная валюта.");}
 function pathId(path,prefix){const id=decodeURIComponent(path.slice(prefix.length));if(!id||id.includes("/")||id.length>100)throw new ApiError("Некорректный идентификатор.");return id;}
