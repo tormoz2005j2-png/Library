@@ -6,7 +6,8 @@
   "workers_dev": true,
   "preview_urls": false,
   "vars": {
-    "ALLOWED_ORIGINS": "http://localhost:8000,https://tormoz2005j2-png.github.io,https://tsunkura.com,https://www.tsunkura.com"
+    "ALLOWED_ORIGINS": "http://localhost:8000,https://tormoz2005j2-png.github.io,https://tsunkura.com,https://www.tsunkura.com",
+    "ADMIN_EMAILS": "tormoz2005j2@gmail.com"
   },
   "d1_databases": [
     {

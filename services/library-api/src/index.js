@@ -25,7 +25,7 @@ export default {
         }, 200, cors);
       }
 
-      if (request.method === "POST" && path === "/api/auth/register") return json(await register(await readJson(request), env.DB), 201, cors);
+      if (request.method === "POST" && path === "/api/auth/register") return json(await register(await readJson(request), env.DB, env.ADMIN_EMAILS), 201, cors);
       if (request.method === "POST" && path === "/api/auth/login") return json(await login(await readJson(request), env.DB), 200, cors);
       if (request.method === "POST" && path === "/api/auth/logout") {
         if (user) await env.DB.prepare("DELETE FROM sessions WHERE id = ?").bind(user.sessionId).run();
@@ -131,13 +131,12 @@ const requireUser = user => { if (!user) throw new ApiError("Войдите, ч�
 const requireAdmin = user => { requireUser(user); if (user.role !== "admin") throw new ApiError("Требуются права администратора.", 403); return user; };
 const publicUser = row => ({ id: row.id, email: row.email, displayName: row.display_name, role: row.role || "user" });
 
-async function register(body, db) {
+async function register(body, db, adminEmails) {
   const email = validEmail(body.email); const displayName = text(body.displayName, 80).trim(); const password = validPassword(body.password);
   if (displayName.length < 2) throw new ApiError("Имя должно содержать минимум 2 символа.");
   const exists = await db.prepare("SELECT 1 FROM users WHERE email = ? COLLATE NOCASE").bind(email).first();
   if (exists) throw new ApiError("Пользователь с таким email уже существует.", 409);
-  const count = await db.prepare("SELECT count(*) total FROM users").first();
-  const id = crypto.randomUUID(), salt = randomToken(16), hash = await hashPassword(password, salt), role = Number(count?.total) === 0 ? "admin" : "user";
+  const id = crypto.randomUUID(), salt = randomToken(16), hash = await hashPassword(password, salt), role = roleForEmail(email, adminEmails);
   await db.prepare("INSERT INTO users(id,email,display_name,password_hash,password_salt,role) VALUES(?,?,?,?,?,?)").bind(id,email,displayName,hash,salt,role).run();
   return createSession(db, { id, email, display_name: displayName, role });
 }
@@ -256,11 +255,12 @@ function nullableNumber(v){if(v==null||v==="")return null;const n=Number(v);if(!
 const toCents=v=>v==null?null:Math.round(v*100);
 function validEmail(v){const s=text(v,254).trim().toLowerCase();if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s))throw new ApiError("Введите корректный email.");return s;}
 function validPassword(v){const s=text(v,200);if(s.length<8)throw new ApiError("Пароль должен содержать минимум 8 символов.");return s;}
+function roleForEmail(email,configured){const admins=String(configured||"").split(",").map(x=>x.trim().toLowerCase()).filter(Boolean);return admins.includes(String(email||"").trim().toLowerCase())?"admin":"user";}
 function validDate(v){const s=text(v,10),m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(s);if(!m)throw new ApiError("Некорректная дата.");const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3]));if(d.getUTCFullYear()!==+m[1]||d.getUTCMonth()!==+m[2]-1||d.getUTCDate()!==+m[3])throw new ApiError("Некорректная дата.");return s;}
 function validateSymbolCurrency(v){if(!new Set(["€","$","₽","£","¥"]).has(v))throw new ApiError("Некорректная валюта.");}
 function pathId(path,prefix){const id=decodeURIComponent(path.slice(prefix.length));if(!id||id.includes("/")||id.length>100)throw new ApiError("Некорректный идентификатор.");return id;}
 function randomToken(bytes){const a=new Uint8Array(bytes);crypto.getRandomValues(a);return btoa(String.fromCharCode(...a)).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,"");}
-async function hashPassword(password,salt){const material=await crypto.subtle.importKey("raw",new TextEncoder().encode(password),"PBKDF2",false,["deriveBits"]);const bits=await crypto.subtle.deriveBits({name:"PBKDF2",hash:"SHA-256",salt:new TextEncoder().encode(salt),iterations:210000},material,256);return bytesToHex(new Uint8Array(bits));}
+async function hashPassword(password,salt){const material=await crypto.subtle.importKey("raw",new TextEncoder().encode(password),"PBKDF2",false,["deriveBits"]);const bits=await crypto.subtle.deriveBits({name:"PBKDF2",hash:"SHA-256",salt:new TextEncoder().encode(salt),iterations:100000},material,256);return bytesToHex(new Uint8Array(bits));}
 async function sha256(v){return bytesToHex(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(v))));}
 const bytesToHex=a=>[...a].map(x=>x.toString(16).padStart(2,"0")).join("");
 async function constantEqual(a,b){if(a.length!==b.length)return false;let d=0;for(let i=0;i<a.length;i++)d|=a.charCodeAt(i)^b.charCodeAt(i);return d===0;}
@@ -268,4 +268,4 @@ function originAllowed(origin,configured){if(!origin)return true;return String(c
 function corsHeaders(origin,configured){return{"Access-Control-Allow-Origin":originAllowed(origin,configured)?origin:"","Access-Control-Allow-Headers":"Content-Type, Authorization","Access-Control-Allow-Methods":"GET, POST, PUT, DELETE, OPTIONS","Cache-Control":"no-store","Vary":"Origin"};}
 function json(body,status,headers){return new Response(JSON.stringify(body),{status,headers:{...headers,"Content-Type":"application/json; charset=utf-8"}});}
 
-export const __test = { validDate, normalizeItem, validEmail, validPassword };
+export const __test = { validDate, normalizeItem, validEmail, validPassword, roleForEmail };

@@ -16,3 +16,9 @@ test("email and password validation", () => {
 test("catalog item rejects unsafe identifiers", () => {
   assert.throws(() => __test.normalizeItem({ id: "../x", title: "X", type: "Книга", status: "Хочу прочитать" }), /безопасный ID/);
 });
+
+test("admin role is assigned only to configured emails", () => {
+  assert.equal(__test.roleForEmail(" OWNER@example.com ", "owner@example.com,second@example.com"), "admin");
+  assert.equal(__test.roleForEmail("first-user@example.com", "owner@example.com"), "user");
+  assert.equal(__test.roleForEmail("owner@example.com", ""), "user");
+});
