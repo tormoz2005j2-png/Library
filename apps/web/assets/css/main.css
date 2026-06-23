@@ -162,7 +162,7 @@
   .cover-button .card-cover-blur,.title-hero .detail-cover .detail-cover-blur{display:none}
   .cover-button .card-cover-main,.title-hero .detail-cover .detail-cover-main{object-fit:contain}
   /* Естественные пропорции: без пустых полей и без обрезки изображения. */
-  .card{border-radius:9px}
+  .card{width:100%;max-width:245px;justify-self:center;border-radius:9px}
   .card:not(.skeleton) .cover-button{aspect-ratio:auto;border-radius:6px 6px 0 0}
   .card:not(.skeleton) .cover-button .card-cover-main{position:relative;inset:auto;width:100%;height:auto;object-fit:initial}
   .card:not(.skeleton) .cover-button:has(.cover-fallback){aspect-ratio:3/4}
