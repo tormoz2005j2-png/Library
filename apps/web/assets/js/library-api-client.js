@@ -16,6 +16,9 @@ class LibraryApi {
   async logout(){try{await this.send("/api/auth/logout","POST");}finally{this.token="";}}
   me(){return this.get("/api/auth/me");} loadLibrary(){return this.get("/api/library");}
   title(id){return this.get(`/api/titles/${encodeURIComponent(id)}`);} profile(){return this.get("/api/profile");}
+  collections(){return this.get("/api/collections");}
+  addToCollection(id,name){return this.send(`/api/titles/${encodeURIComponent(id)}/collections`,"POST",{name});}
+  removeFromCollection(titleId,collectionId){return this.send(`/api/titles/${encodeURIComponent(titleId)}/collections/${encodeURIComponent(collectionId)}`,"DELETE");}
   adminOverview(){return this.get("/api/admin/overview");}
   setUserRole(id,role){return this.send(`/api/admin/users/${encodeURIComponent(id)}/role`,"PUT",{role});}
   moderateReview(id){return this.send(`/api/admin/reviews/${encodeURIComponent(id)}`,"DELETE");}

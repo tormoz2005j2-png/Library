@@ -46,6 +46,7 @@ export default {
       }
 
       if (request.method === "GET" && path === "/api/profile") return json(await profile(env.DB, requireUser(user).id), 200, cors);
+      if (request.method === "GET" && path === "/api/collections") return json({ collections: await userCollections(env.DB, requireUser(user).id) }, 200, cors);
       if (request.method === "GET" && path === "/api/admin/overview") return json(await adminOverview(env.DB, requireAdmin(user)), 200, cors);
       if (request.method === "PUT" && /^\/api\/admin\/users\/[^/]+\/role$/.test(path)) {
         const targetId = decodeURIComponent(path.split("/")[4]);
@@ -67,6 +68,14 @@ export default {
       if (request.method === "PUT" && /^\/api\/titles\/[^/]+\/rating$/.test(path)) {
         const titleId = decodeURIComponent(path.split("/")[3]);
         return json(await saveRating(env.DB, requireUser(user).id, titleId, await readJson(request)), 200, cors);
+      }
+      if (request.method === "POST" && /^\/api\/titles\/[^/]+\/collections$/.test(path)) {
+        const titleId = decodeURIComponent(path.split("/")[3]);
+        return json(await addToCollection(env.DB, requireUser(user).id, titleId, await readJson(request)), 201, cors);
+      }
+      if (request.method === "DELETE" && /^\/api\/titles\/[^/]+\/collections\/[^/]+$/.test(path)) {
+        const parts = path.split("/");
+        return json(await removeFromCollection(env.DB, requireUser(user).id, decodeURIComponent(parts[3]), decodeURIComponent(parts[5])), 200, cors);
       }
       if (request.method === "POST" && /^\/api\/titles\/[^/]+\/transactions$/.test(path)) {
         const titleId = decodeURIComponent(path.split("/")[3]);
@@ -198,6 +207,24 @@ async function profile(db,userId) {
   const [statuses,transactions,reviews]=await db.batch([db.prepare("SELECT s.status,s.read_on readDate,s.rating ownRating,s.updated_at updatedAt,i.id titleId,i.title,i.author,i.cover_url cover FROM user_title_statuses s JOIN library_items i ON i.id=s.title_id WHERE s.user_id=? ORDER BY s.updated_at DESC").bind(userId),db.prepare("SELECT t.id,t.title_id titleId,t.type,t.amount_cents,t.currency,t.action_date actionDate,t.comment,i.title FROM title_transactions t JOIN library_items i ON i.id=t.title_id WHERE t.user_id=? ORDER BY t.action_date DESC").bind(userId),db.prepare("SELECT r.id,r.title_id titleId,r.body,r.rating,r.updated_at updatedAt,i.title FROM reviews r JOIN library_items i ON i.id=r.title_id WHERE r.user_id=? ORDER BY r.updated_at DESC").bind(userId)]);
   const tx=transactions.results.map(transactionDto), totals={}; for(const t of tx){totals[t.currency] ||= { spent:0,received:0,difference:0 }; totals[t.currency][t.type==="purchase"?"spent":"received"]+=t.amount;} for(const v of Object.values(totals))v.difference=Math.round((v.received-v.spent)*100)/100;
   return { titles:statuses.results, transactions:tx, reviews:reviews.results, totals };
+}
+async function userCollections(db,userId){
+  const [collections,titles]=await db.batch([db.prepare("SELECT c.id,c.name,count(ct.title_id) titleCount,c.created_at createdAt,c.updated_at updatedAt FROM collections c LEFT JOIN collection_titles ct ON ct.collection_id=c.id WHERE c.user_id=? GROUP BY c.id ORDER BY c.name COLLATE NOCASE").bind(userId),db.prepare("SELECT ct.collection_id collectionId,ct.title_id titleId FROM collection_titles ct JOIN collections c ON c.id=ct.collection_id WHERE c.user_id=?").bind(userId)]);
+  const ids={}; for(const row of titles.results)(ids[row.collectionId]||=[]).push(row.titleId);
+  return collections.results.map(row=>({...row,titleCount:Number(row.titleCount)||0,titleIds:ids[row.id]||[]}));
+}
+async function addToCollection(db,userId,titleId,body){
+  await assertTitle(db,titleId); const name=text(body.name,80).trim(); if(!name)throw new ApiError("Введите название подборки.");
+  let collection=await db.prepare("SELECT id,name FROM collections WHERE user_id=? AND name=? COLLATE NOCASE").bind(userId,name).first();
+  if(!collection){const id=crypto.randomUUID();await db.prepare("INSERT INTO collections(id,user_id,name) VALUES(?,?,?)").bind(id,userId,name).run();collection={id,name};}
+  await db.prepare("INSERT OR IGNORE INTO collection_titles(collection_id,title_id) VALUES(?,?)").bind(collection.id,titleId).run();
+  return { collection:{...collection} };
+}
+async function removeFromCollection(db,userId,titleId,collectionId){
+  const collection=await db.prepare("SELECT id FROM collections WHERE id=? AND user_id=?").bind(collectionId,userId).first();if(!collection)throw new ApiError("Подборка не найдена.",404);
+  await db.prepare("DELETE FROM collection_titles WHERE collection_id=? AND title_id=?").bind(collectionId,titleId).run();
+  const remaining=await db.prepare("SELECT 1 FROM collection_titles WHERE collection_id=? LIMIT 1").bind(collectionId).first();if(!remaining)await db.prepare("DELETE FROM collections WHERE id=? AND user_id=?").bind(collectionId,userId).run();
+  return { ok:true };
 }
 async function adminOverview(db) {
   const [counts,users,quality,reviews]=await db.batch([
